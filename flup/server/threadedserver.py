@@ -47,11 +47,15 @@ from .threadpool import ThreadPool
 __all__ = ['ThreadedServer']
 
 class ThreadedServer(object):
-    def __init__(self, jobClass=None, jobArgs=(), **kw):
+    def __init__(self, jobClass=None, jobArgs=(), use_signal=True, **kw):
         self._jobClass = jobClass
         self._jobArgs = jobArgs
+        self._use_signal = use_signal
 
         self._threadPool = ThreadPool(**kw)
+
+    def stop(self):
+        self._keepGoing = False
 
     def run(self, sock, timeout=1.0):
         """
@@ -64,12 +68,12 @@ class ThreadedServer(object):
         self._hupReceived = False
 
         # Might need to revisit this?
-        if not sys.platform.startswith('win'):
+        if not sys.platform.startswith('win') and self._use_signal:
             self._installSignalHandlers()
 
         # Set close-on-exec
         setCloseOnExec(sock)
-        
+
         # Main loop.
         while self._keepGoing:
             try:
@@ -88,7 +92,7 @@ class ThreadedServer(object):
                     raise
 
                 setCloseOnExec(clientSock)
-                
+
                 if not self._isClientAllowed(addr):
                     clientSock.close()
                     continue
@@ -105,12 +109,12 @@ class ThreadedServer(object):
             self._mainloopPeriodic()
 
         # Restore signal handlers.
-        if not sys.platform.startswith('win'):
+        if not sys.platform.startswith('win') and self._use_signal:
             self._restoreSignalHandlers()
 
         # Return bool based on whether or not SIGHUP was received.
         return self._hupReceived
-        
+
     def shutdown(self):
         """Wait for running threads to finish."""
         self._threadPool.shutdown()
